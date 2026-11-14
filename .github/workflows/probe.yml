@@ -11,7 +11,7 @@ on:
 env:
   BOX86_REF: v0.3.8
   WINE_VERSION: "9.0"
-  DEBIAN_SUITE: bookworm
+  DEBIAN_SUITE: trixie   # glibc at least as new as the cross compiler's (Ubuntu 24.04: 2.39)
 
 jobs:
   bundle:
@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends mmdebstrap qemu-user-static binfmt-support \
-            gcc-arm-linux-gnueabihf cmake make python3 xz-utils
+            gcc-arm-linux-gnueabihf libc6-dev-armhf-cross cmake make python3 xz-utils
 
       - name: Build Box86
         run: |
@@ -38,7 +38,7 @@ jobs:
       - name: Root file system (Debian armhf, minimal)
         run: |
           sudo mmdebstrap --arch=armhf --variant=minbase \
-            --include=proot,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2,libgnutls30,ca-certificates \
+            --include=proot,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
             "$DEBIAN_SUITE" rootfs http://deb.debian.org/debian
           sudo rm -rf rootfs/var/cache/apt/* rootfs/var/lib/apt/lists/* rootfs/usr/share/doc/* \
             rootfs/usr/share/man/* rootfs/usr/share/locale/* rootfs/dev/*
