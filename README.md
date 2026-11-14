@@ -8,7 +8,7 @@ Experiment for the RetroFire project: run Windows (x86) programs on the Fire TV 
 * [Wine](https://www.winehq.org) (x86 build by [Kron4ek](https://github.com/Kron4ek/Wine-Builds))
   provides the Windows API.
 * A minimal Debian armhf root file system gives them the glibc userland Android lacks; it is
-  entered with `proot`, so no root access is needed.
+  entered with `proot` (Termux's fork, which knows Android), so no root access is needed.
 
 ## Stage 0: the probe
 

@@ -11,7 +11,7 @@ unset LD_PRELOAD
 case "$1" in
   wine|wineserver|wineboot|winecfg) set -- box86 "/opt/wine/bin/$@" ;;
 esac
-exec "$L/ld-linux-armhf.so.3" --library-path "$L" "$R/usr/bin/proot" \
+exec "$L/ld-linux-armhf.so.3" --library-path "$L" "$R/usr/local/bin/proot" \
   -r "$R" -b /dev -b /proc -b /sys -w /root \
   /usr/bin/env -i HOME=/root USER=root TERM=xterm LANG=C \
     PATH=/usr/local/bin:/usr/bin:/bin:/opt/wine/bin \

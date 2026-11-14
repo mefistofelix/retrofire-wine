@@ -38,11 +38,21 @@ jobs:
       - name: Root file system (Debian armhf, minimal)
         run: |
           sudo mmdebstrap --arch=armhf --variant=minbase \
-            --include=proot,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
+            --include=libtalloc2,libtalloc-dev,libc6-dev,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
             "$DEBIAN_SUITE" rootfs http://deb.debian.org/debian
           sudo rm -rf rootfs/var/cache/apt/* rootfs/var/lib/apt/lists/* rootfs/usr/share/doc/* \
             rootfs/usr/share/man/* rootfs/usr/share/locale/* rootfs/dev/*
           sudo du -sh rootfs
+
+      # Debian's proot keeps its files in /tmp, which Android does not have: Termux's fork takes
+      # PROOT_TMP_DIR and has the Android fixes. Built against the root file system's own libc.
+      - name: Build proot (Termux fork)
+        run: |
+          git clone --depth 1 https://github.com/termux/proot.git
+          sudo chmod -R a+rX rootfs/usr/include rootfs/usr/lib
+          make -C proot/src -j"$(nproc)" V=1             CC="arm-linux-gnueabihf-gcc --sysroot=$PWD/rootfs"             STRIP=arm-linux-gnueabihf-strip OBJCOPY=arm-linux-gnueabihf-objcopy OBJDUMP=arm-linux-gnueabihf-objdump
+          file proot/src/proot
+          sudo install -m 755 proot/src/proot rootfs/usr/local/bin/proot
 
       - name: Add Box86 and Wine
         run: |
