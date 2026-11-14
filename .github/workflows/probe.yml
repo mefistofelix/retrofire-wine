@@ -1,0 +1,72 @@
+name: Probe bundle
+
+# Builds Box86 (ARMv8 AArch32, dynarec) and packs it with a minimal Debian armhf root file
+# system (with proot) and Wine x86 into one archive, published as the release "probe".
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  BOX86_REF: v0.3.8
+  WINE_VERSION: "9.0"
+  DEBIAN_SUITE: bookworm
+
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mmdebstrap qemu-user-static binfmt-support \
+            gcc-arm-linux-gnueabihf cmake make python3 xz-utils
+
+      - name: Build Box86
+        run: |
+          git clone --depth 1 --branch "$BOX86_REF" https://github.com/ptitSeb/box86.git
+          cmake -S box86 -B box86/build -DRPI4=1 -DARM_DYNAREC=ON -DNOGIT=1 \
+            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          make -C box86/build -j"$(nproc)"
+          file box86/build/box86
+
+      - name: Root file system (Debian armhf, minimal)
+        run: |
+          sudo mmdebstrap --arch=armhf --variant=minbase \
+            --include=proot,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2,libgnutls30,ca-certificates \
+            "$DEBIAN_SUITE" rootfs http://deb.debian.org/debian
+          sudo rm -rf rootfs/var/cache/apt/* rootfs/var/lib/apt/lists/* rootfs/usr/share/doc/* \
+            rootfs/usr/share/man/* rootfs/usr/share/locale/* rootfs/dev/*
+          sudo du -sh rootfs
+
+      - name: Add Box86 and Wine
+        run: |
+          sudo install -m 755 box86/build/box86 rootfs/usr/local/bin/box86
+          sudo mkdir -p rootfs/usr/lib/i386-linux-gnu rootfs/etc/binfmt.d
+          sudo cp box86/x86lib/* rootfs/usr/lib/i386-linux-gnu/
+          curl -fsSL -o wine.tar.xz "https://github.com/Kron4ek/Wine-Builds/releases/download/${WINE_VERSION}/wine-${WINE_VERSION}-x86.tar.xz"
+          sudo mkdir -p rootfs/opt/wine
+          sudo tar -xJf wine.tar.xz -C rootfs/opt/wine --strip-components=1
+          sudo du -sh rootfs/opt/wine rootfs
+
+      - name: Pack
+        run: |
+          mkdir out
+          cp probe/run.sh run.sh
+          sudo tar --numeric-owner -czf out/retrofire-wine-probe.tar.gz run.sh rootfs
+          ls -la out
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete probe --yes --cleanup-tag || true
+          gh release create probe out/*.tar.gz --prerelease --target "$GITHUB_SHA" \
+            --title "Probe bundle $(echo "$GITHUB_SHA" | cut -c1-7)" \
+            --notes "Box86 ${BOX86_REF}, Wine ${WINE_VERSION} x86 (Kron4ek), Debian ${DEBIAN_SUITE} armhf."
