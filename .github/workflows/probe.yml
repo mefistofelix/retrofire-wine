@@ -50,7 +50,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/termux/proot.git
           sudo chmod -R a+rX rootfs/usr/include rootfs/usr/lib
-          make -C proot/src -j"$(nproc)" V=1             CC="arm-linux-gnueabihf-gcc --sysroot=$PWD/rootfs"             STRIP=arm-linux-gnueabihf-strip OBJCOPY=arm-linux-gnueabihf-objcopy OBJDUMP=arm-linux-gnueabihf-objdump
+          make -C proot/src -j"$(nproc)" V=1             CC="arm-linux-gnueabihf-gcc --sysroot=$PWD/rootfs -DARM_cpsr=uregs[16] -DPSR_T_BIT=0x20"             STRIP=arm-linux-gnueabihf-strip OBJCOPY=arm-linux-gnueabihf-objcopy OBJDUMP=arm-linux-gnueabihf-objdump
           file proot/src/proot
           sudo install -m 755 proot/src/proot rootfs/usr/local/bin/proot
 
