@@ -22,3 +22,26 @@ it from an adb shell:
 The probe answers two questions only: does Windows code run on the stick this way, and how
 fast compared with DOSBox Pure. Showing it on the TV from inside RetroArch (video, audio,
 input as a libretro core) is a later, larger step.
+
+## Result of the probe (Fire TV Stick 4K Max, 15 Nov 2026)
+
+Run as the RetroFire app user in its data folder (`adb shell run-as com.retroarch.retrofire`):
+
+* `wine cmd /c ver` answers `Microsoft Windows 10.0.19043`: Wine 9.0 x86 runs under Box86
+  v0.3.8 (dynarec for ARMv8 AArch32) inside the proot'ed Debian.
+* Starting Wine takes about 65-70 s every time (its server and services, and proot traps
+  every system call).
+* `probe/bench.c` (Win32 console, `-O2`): 2000M iterations of a small integer loop in 13 s,
+  the sieve in 5 s, a 1600x1600 Mandelbrot (x87 floating point) in 4 s. That is roughly
+  1000, 600 and 350 million x86 instructions per second; DOSBox Pure's recompiler reaches
+  about 40 million (40000 cycles per millisecond) on the same stick.
+
+What had to be worked around:
+
+* Debian's proot keeps its loader in `/tmp`, which Android lacks: Termux's fork is built.
+* The kernel cannot start x86 programs: `wine` and `wineserver` are scripts that call Box86,
+  and `wine-preloader` is disabled.
+* The adb shell user cannot create Unix sockets in `/data/local/tmp` (Wine's server needs
+  one): the bundle runs from the app's own data folder, where a libretro core would live.
+
+Not done: anything on screen. No X server, no sound, no input.
