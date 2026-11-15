@@ -59,11 +59,8 @@ int main(void)
 	t2 = now_ms();
 	c = mandel(1600);
 	t3 = now_ms();
-	printf("lcg 2000M iterations: %.0f ms (check %u)
-", t1 - t0, a);
-	printf("sieve 64K x3000:      %.0f ms (primes %u)
-", t2 - t1, b);
-	printf("mandelbrot 1600x1600: %.0f ms (sum %.0f)
-", t3 - t2, c);
+	printf("lcg 2000M iterations: %.0f ms (check %u)\n", t1 - t0, a);
+	printf("sieve 64K x3000:      %.0f ms (primes %u)\n", t2 - t1, b);
+	printf("mandelbrot 1600x1600: %.0f ms (sum %.0f)\n", t3 - t2, c);
 	return 0;
 }
