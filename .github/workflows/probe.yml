@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends mmdebstrap arch-test debian-archive-keyring qemu-user-static binfmt-support \
-            gcc-arm-linux-gnueabihf libc6-dev-armhf-cross cmake make python3 xz-utils
+            gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-mingw-w64-i686 cmake make python3 xz-utils
 
       - name: Build Box86
         run: |
@@ -63,12 +63,26 @@ jobs:
           sudo mkdir -p rootfs/opt/wine
           sudo tar -xJf wine.tar.xz -C rootfs/opt/wine --strip-components=1
           sudo du -sh rootfs/opt/wine rootfs
+          # The ARM kernel cannot start Wine's x86 programs when Wine launches them itself
+          # (its server, a child process): each becomes a script that calls Box86.
+          for f in wine wineserver; do
+            sudo mv rootfs/opt/wine/bin/$f rootfs/opt/wine/bin/$f.x86
+            sudo install -m 755 probe/x86wrap.sh rootfs/opt/wine/bin/$f
+          done
+          sudo mv rootfs/opt/wine/bin/wine-preloader rootfs/opt/wine/bin/wine-preloader.off
+
+      - name: Benchmark program (Win32 x86)
+        run: |
+          i686-w64-mingw32-gcc -O2 -static -o bench.exe probe/bench.c
+          i686-w64-mingw32-objdump -d bench.exe --no-show-raw-insn | awk '/<_lcg>:/,/ret/' | head -40
+          sudo install -m 644 bench.exe rootfs/root/bench.exe
 
       - name: Pack
         run: |
           mkdir out
           cp probe/run.sh run.sh
           sudo tar --numeric-owner -czf out/retrofire-wine-probe.tar.gz run.sh rootfs
+          cp bench.exe out/bench.exe
           ls -la out
 
       - name: Publish release
@@ -77,6 +91,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete probe --yes --cleanup-tag || true
-          gh release create probe out/*.tar.gz --prerelease --target "$GITHUB_SHA" \
+          gh release create probe out/*.tar.gz out/bench.exe --prerelease --target "$GITHUB_SHA" \
             --title "Probe bundle $(echo "$GITHUB_SHA" | cut -c1-7)" \
             --notes "Box86 ${BOX86_REF}, Wine ${WINE_VERSION} x86 (Kron4ek), Debian ${DEBIAN_SUITE} armhf."
