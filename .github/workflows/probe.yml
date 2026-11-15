@@ -90,7 +90,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release delete probe --yes --cleanup-tag || true
-          gh release create probe out/*.tar.gz out/bench.exe --prerelease --target "$GITHUB_SHA" \
-            --title "Probe bundle $(echo "$GITHUB_SHA" | cut -c1-7)" \
-            --notes "Box86 ${BOX86_REF}, Wine ${WINE_VERSION} x86 (Kron4ek), Debian ${DEBIAN_SUITE} armhf."
+          # keep the release and its tag, replace the files (deleting and recreating the tag in
+          # one go left no release at all once)
+          gh release view probe >/dev/null 2>&1 || gh release create probe --prerelease --target "$GITHUB_SHA"             --title "Probe bundle" --notes "Box86 ${BOX86_REF}, Wine ${WINE_VERSION} x86 (Kron4ek), Debian ${DEBIAN_SUITE} armhf."
+          gh release upload probe out/*.tar.gz out/bench.exe --clobber
