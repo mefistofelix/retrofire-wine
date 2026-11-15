@@ -38,7 +38,7 @@ jobs:
       - name: Root file system (Debian armhf, minimal)
         run: |
           sudo mmdebstrap --arch=armhf --variant=minbase \
-            --include=libtalloc2,libtalloc-dev,libc6-dev,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
+            --include=xvfb,xdotool,libtalloc2,libtalloc-dev,libc6-dev,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
             "$DEBIAN_SUITE" rootfs http://deb.debian.org/debian
           sudo rm -rf rootfs/var/cache/apt/* rootfs/var/lib/apt/lists/* rootfs/usr/share/doc/* \
             rootfs/usr/share/man/* rootfs/usr/share/locale/* rootfs/dev/*
