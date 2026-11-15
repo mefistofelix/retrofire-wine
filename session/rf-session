@@ -1,0 +1,14 @@
+#!/bin/sh
+# rf-session EXE WIDTH HEIGHT: inside the root file system. A virtual X display whose frame
+# buffer is the file /root/fb/Xvfb_screen0 (the core maps it), the input helper, then the
+# program in a Wine desktop of the same size.
+EXE="$1"; W="${2:-640}"; H="${3:-480}"
+rm -rf /tmp/.X1-lock /tmp/.X11-unix /root/fb
+mkdir -p /root/fb /tmp/.X11-unix
+Xvfb :1 -screen 0 "${W}x${H}x24" -fbdir /root/fb -nolisten tcp -ac > /root/xvfb.log 2>&1 &
+i=0
+while [ ! -S /tmp/.X11-unix/X1 ] && [ $i -lt 150 ]; do sleep 0.1; i=$((i + 1)); done
+export DISPLAY=:1
+rf-input <&3 > /root/input.log 2>&1 &
+cd /game 2>/dev/null
+exec wine explorer "/desktop=rf,${W}x${H}" "/game/$EXE"

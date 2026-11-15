@@ -1,5 +1,6 @@
 #!/system/bin/sh
 # run.sh COMMAND...: run COMMAND inside the root file system (proot, no root needed).
+# With RF_BIND=<folder> that folder is /game inside.
 # "wine ..." runs /opt/wine/bin/wine, a script that starts the x86 program with Box86.
 # Run it from the RetroFire app's data folder (adb shell run-as com.retroarch.retrofire):
 # the adb shell user may not create the Unix socket Wine's server needs in /data/local/tmp.
@@ -14,7 +15,7 @@ case "$1" in
   wine|wineserver) set -- "/opt/wine/bin/$@" ;;
 esac
 exec "$L/ld-linux-armhf.so.3" --library-path "$L" "$R/usr/local/bin/proot" \
-  -r "$R" -b "$R:$R" -b /dev -b /proc -b /sys -w /root \
+  -r "$R" -b "$R:$R" ${RF_BIND:+-b} ${RF_BIND:+"$RF_BIND:/game"} -b /dev -b /proc -b /sys -w /root \
   /usr/bin/env -i HOME=/root USER=root TERM=xterm LANG=C \
     PATH=/usr/local/bin:/usr/bin:/bin:/opt/wine/bin \
     WINEPREFIX=/root/.wine WINEDEBUG="${WINEDEBUG:--all}" WINEDLLOVERRIDES="mscoree,mshtml=" \

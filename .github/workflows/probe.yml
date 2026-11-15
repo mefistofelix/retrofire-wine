@@ -14,6 +14,26 @@ env:
   DEBIAN_SUITE: trixie   # glibc at least as new as the cross compiler's (Ubuntu 24.04: 2.39)
 
 jobs:
+  core:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the libretro core (Android armeabi-v7a)
+        run: |
+          mkdir out
+          "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"             -shared -fPIC -O2 -Wall -Icore -o out/retrofire_wine_libretro_android.so core/libretro.c
+          cp core/retrofire_wine_libretro.info out/
+          ls -la out
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view core >/dev/null 2>&1 || gh release create core --prerelease --target "$GITHUB_SHA"             --title "libretro core" --notes "RetroFire Wine libretro core for Android armeabi-v7a."
+          gh release upload core out/* --clobber
+
   bundle:
     runs-on: ubuntu-24.04
     permissions:
@@ -38,7 +58,7 @@ jobs:
       - name: Root file system (Debian armhf, minimal)
         run: |
           sudo mmdebstrap --arch=armhf --variant=minbase \
-            --include=xvfb,xdotool,libtalloc2,libtalloc-dev,libc6-dev,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
+            --include=xvfb,xdotool,libx11-dev,libxtst-dev,libtalloc2,libtalloc-dev,libc6-dev,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
             "$DEBIAN_SUITE" rootfs http://deb.debian.org/debian
           sudo rm -rf rootfs/var/cache/apt/* rootfs/var/lib/apt/lists/* rootfs/usr/share/doc/* \
             rootfs/usr/share/man/* rootfs/usr/share/locale/* rootfs/dev/*
@@ -71,6 +91,11 @@ jobs:
           done
           sudo mv rootfs/opt/wine/bin/wine-preloader rootfs/opt/wine/bin/wine-preloader.off
 
+      - name: Session scripts and input helper
+        run: |
+          arm-linux-gnueabihf-gcc --sysroot=$PWD/rootfs -O2 -o rf-input session/rf-input.c -lXtst -lX11
+          sudo install -m 755 rf-input session/rf-session rootfs/usr/local/bin/
+
       - name: Benchmark program (Win32 x86)
         run: |
           i686-w64-mingw32-gcc -O2 -static -o bench.exe probe/bench.c
@@ -81,7 +106,8 @@ jobs:
         run: |
           mkdir out
           cp probe/run.sh run.sh
-          sudo tar --numeric-owner -czf out/retrofire-wine-probe.tar.gz run.sh rootfs
+          cp session/host.sh host.sh
+          sudo tar --numeric-owner -czf out/retrofire-wine-probe.tar.gz run.sh host.sh rootfs
           cp bench.exe out/bench.exe
           ls -la out
 
