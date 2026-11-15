@@ -6,15 +6,19 @@
 # the adb shell user may not create the Unix socket Wine's server needs in /data/local/tmp.
 D="$(cd "$(dirname "$0")" && pwd)"
 R="$D/rootfs"
-L="$R/usr/lib/arm-linux-gnueabihf"
 mkdir -p "$D/tmp" "$R/tmp" "$R/root"
+# host/proot is Termux's Android build: it runs outside the root file system, with bionic.
+# Inside an app Android filters system calls (seccomp) and kills a process that makes one it
+# does not know; the glibc inside does (rseq, clone3, the 64-bit time calls). This proot
+# answers "not implemented" for those instead, and glibc falls back to the old calls.
 export PROOT_TMP_DIR="$D/tmp"
-export PROOT_NO_SECCOMP=1
+export PROOT_LOADER="$D/host/loader"
+export LD_LIBRARY_PATH="$D/host"
 unset LD_PRELOAD
 case "$1" in
   wine|wineserver) set -- "/opt/wine/bin/$@" ;;
 esac
-exec "$L/ld-linux-armhf.so.3" --library-path "$L" "$R/usr/local/bin/proot" \
+exec "$D/host/proot" -0 --link2symlink \
   -r "$R" -b "$R:$R" ${RF_BIND:+-b} ${RF_BIND:+"$RF_BIND:/game"} -b /dev -b /proc -b /sys -w /root \
   /usr/bin/env -i HOME=/root USER=root TERM=xterm LANG=C \
     PATH=/usr/local/bin:/usr/bin:/bin:/opt/wine/bin \

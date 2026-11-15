@@ -1,7 +1,7 @@
 name: Probe bundle
 
 # Builds Box86 (ARMv8 AArch32, dynarec) and packs it with a minimal Debian armhf root file
-# system (with proot) and Wine x86 into one archive, published as the release "probe".
+# system, Wine x86 and Termux's proot into one archive, published as the release "probe".
 
 on:
   push:
@@ -47,32 +47,51 @@ jobs:
           sudo apt-get install -y --no-install-recommends mmdebstrap arch-test debian-archive-keyring qemu-user-static binfmt-support \
             gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-mingw-w64-i686 cmake make python3 xz-utils
 
+      # Ubuntu's ARM compiler makes time_t 64 bits wide by default. Box86 hands the x86
+      # program's own structures (32-bit times) to the C library, so it must be built with the
+      # old 32-bit time_t: with the 64-bit one every clock lost its nanoseconds (Windows time
+      # moved in steps of one second) and the sleeps were wrong.
       - name: Build Box86
         run: |
+          OLD_TIME="-U_TIME_BITS -U_FILE_OFFSET_BITS"
+          echo "compiler defaults:"; arm-linux-gnueabihf-gcc -dM -E - < /dev/null | grep -E "_TIME_BITS|_FILE_OFFSET_BITS" || true
+          arm-linux-gnueabihf-gcc $OLD_TIME -fsyntax-only probe/time32.c
           git clone --depth 1 --branch "$BOX86_REF" https://github.com/ptitSeb/box86.git
-          cmake -S box86 -B box86/build -DRPI4=1 -DARM_DYNAREC=ON -DNOGIT=1 \
-            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake -S box86 -B box86/build -DRPI4=1 -DARM_DYNAREC=ON -DNOGIT=1 -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_FLAGS="$OLD_TIME" -DCMAKE_ASM_FLAGS="$OLD_TIME"
           make -C box86/build -j"$(nproc)"
           file box86/build/box86
 
       - name: Root file system (Debian armhf, minimal)
         run: |
           sudo mmdebstrap --arch=armhf --variant=minbase \
-            --include=xvfb,xdotool,libx11-dev,libxtst-dev,libtalloc2,libtalloc-dev,libc6-dev,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
+            --include=xvfb,xdotool,libx11-dev,libxtst-dev,libc6-dev,libstdc++6,libfreetype6,libfontconfig1,libx11-6,libxext6,libxrender1,libxrandr2,libxcursor1,libxi6,libxfixes3,libxinerama1,libxcomposite1,libasound2t64,libgnutls30t64,ca-certificates \
             "$DEBIAN_SUITE" rootfs http://deb.debian.org/debian
           sudo rm -rf rootfs/var/cache/apt/* rootfs/var/lib/apt/lists/* rootfs/usr/share/doc/* \
             rootfs/usr/share/man/* rootfs/usr/share/locale/* rootfs/dev/*
           sudo du -sh rootfs
 
-      # Debian's proot keeps its files in /tmp, which Android does not have: Termux's fork takes
-      # PROOT_TMP_DIR and has the Android fixes. Built against the root file system's own libc.
-      - name: Build proot (Termux fork)
+      # proot runs outside the root file system, so it is Termux's Android build (bionic).
+      # Debian's keeps its files in /tmp, which Android lacks, and inside an app Android's
+      # system call filter kills the glibc programs unless proot answers "not implemented"
+      # for the calls the filter does not know, which Termux's does.
+      - name: Host tools (Termux proot)
         run: |
-          git clone --depth 1 https://github.com/termux/proot.git
-          sudo chmod -R a+rX rootfs/usr/include rootfs/usr/lib
-          make -C proot/src -j"$(nproc)" V=1             CC="arm-linux-gnueabihf-gcc --sysroot=$PWD/rootfs -DARM_cpsr=uregs[16] -DPSR_T_BIT=0x20"             STRIP=arm-linux-gnueabihf-strip OBJCOPY=arm-linux-gnueabihf-objcopy OBJDUMP=arm-linux-gnueabihf-objdump
-          file proot/src/proot
-          sudo install -m 755 proot/src/proot rootfs/usr/local/bin/proot
+          base=https://packages.termux.dev/apt/termux-main
+          curl -fsSL "$base/dists/stable/main/binary-arm/Packages" -o Packages
+          mkdir -p host tdeb
+          for p in proot libtalloc libandroid-shmem; do
+            f="$(awk -v p="$p" '$1 == "Package:" { ok = ($2 == p) } ok && $1 == "Filename:" { print $2; exit }' Packages)"
+            echo "$p: $f"
+            curl -fsSL "$base/$f" -o "tdeb/$p.deb"
+            dpkg-deb -x "tdeb/$p.deb" "tdeb/$p"
+          done
+          U=data/data/com.termux/files/usr
+          cp -L "tdeb/proot/$U/bin/proot" host/proot
+          cp -L "tdeb/proot/$U/libexec/proot/loader" host/loader
+          cp -L "tdeb/libtalloc/$U/lib/libtalloc.so.2" host/libtalloc.so.2
+          cp -L "tdeb/libandroid-shmem/$U/lib/libandroid-shmem.so" host/libandroid-shmem.so
+          chmod 755 host/*
+          file host/*
 
       - name: Add Box86 and Wine
         run: |
@@ -107,7 +126,8 @@ jobs:
           mkdir out
           cp probe/run.sh run.sh
           cp session/host.sh host.sh
-          sudo tar --numeric-owner -czf out/retrofire-wine-probe.tar.gz run.sh host.sh rootfs
+          sudo tar --numeric-owner -czf out/retrofire-wine-probe.tar.gz run.sh host.sh host rootfs
+          cp box86/build/box86 out/box86
           cp bench.exe out/bench.exe
           ls -la out
 
@@ -119,4 +139,4 @@ jobs:
           # keep the release and its tag, replace the files (deleting and recreating the tag in
           # one go left no release at all once)
           gh release view probe >/dev/null 2>&1 || gh release create probe --prerelease --target "$GITHUB_SHA"             --title "Probe bundle" --notes "Box86 ${BOX86_REF}, Wine ${WINE_VERSION} x86 (Kron4ek), Debian ${DEBIAN_SUITE} armhf."
-          gh release upload probe out/*.tar.gz out/bench.exe --clobber
+          gh release upload probe out/*.tar.gz out/bench.exe out/box86 --clobber
