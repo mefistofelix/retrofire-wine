@@ -27,6 +27,7 @@ input as a libretro core) is a later, larger step.
 
 Run as the RetroFire app user in its data folder (`adb shell run-as com.retroarch.retrofire`):
 
+* (Measured with the first Box86 build, whose clocks were wrong: start time and benchmark figures below are not reliable; with the fixed build Wine starts in about 8 s and Pinball is on screen 20 s after launch.)
 * `wine cmd /c ver` answers `Microsoft Windows 10.0.19043`: Wine 9.0 x86 runs under Box86
   v0.3.8 (dynarec for ARMv8 AArch32) inside the proot'ed Debian.
 * Starting Wine takes about 65-70 s every time (its server and services, and proot traps
@@ -44,4 +45,27 @@ What had to be worked around:
 * The adb shell user cannot create Unix sockets in `/data/local/tmp` (Wine's server needs
   one): the bundle runs from the app's own data folder, where a libretro core would live.
 
-Not done: anything on screen. No X server, no sound, no input.
+## Stage 1: on the TV, inside RetroArch
+
+`core/libretro.c` is a libretro core ("RetroFire Wine", content: an `.exe`). It starts
+`host.sh` from the bundle in `<app data>/wb`; inside the root file system `rf-session` runs a
+virtual X display (Xvfb) whose frame buffer is a file the core maps and shows, the helper
+`rf-input` that turns the core's keyboard, mouse and pad events into X events, and the program
+in a Wine desktop of 640x480.
+
+3D Pinball (the Windows XP build) is the test program: it shows on the TV and takes keys sent
+through RetroArch.
+
+What had to be worked around here:
+
+* Inside the app Android filters system calls and kills the glibc programs ("Bad system
+  call"): proot is Termux's Android build (`host/`), which answers "not implemented" instead.
+  It runs with `-0` (the X server wants to be root to compile its keymap) and
+  `--link2symlink` (its lock file is a hard link).
+* A program started in the Wine desktop is not the active window until the focus changes
+  once: `rf-session` moves the focus to the desktop and back.
+* Box86 built with Ubuntu's ARM compiler got a 64-bit `time_t`, and every clock an x86
+  program read lost its nanoseconds: Windows time moved in steps of one second and the game
+  ran in slow motion. `probe/timing.c` shows it; Box86 is now built with the 32-bit one.
+
+Not done: sound, a shorter start, installing the bundle and the games through `rf`.
