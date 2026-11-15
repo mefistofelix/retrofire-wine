@@ -40,17 +40,30 @@ static double mandel(int size)
 	return total;
 }
 
+static double now_ms(void)
+{
+	LARGE_INTEGER f, c;
+	QueryPerformanceFrequency(&f);
+	QueryPerformanceCounter(&c);
+	return (double)c.QuadPart * 1000.0 / (double)f.QuadPart;
+}
+
 int main(void)
 {
-	DWORD t0 = GetTickCount(), t1, t2, t3;
-	unsigned int a = lcg(200000000u);
-	t1 = GetTickCount();
-	unsigned int b = sieve(200);
-	t2 = GetTickCount();
-	double c = mandel(400);
-	t3 = GetTickCount();
-	printf("lcg 200M iterations: %lu ms (check %u)\n", (unsigned long)(t1 - t0), a);
-	printf("sieve 64K x200:      %lu ms (primes %u)\n", (unsigned long)(t2 - t1), b);
-	printf("mandelbrot 400x400:  %lu ms (sum %.0f)\n", (unsigned long)(t3 - t2), c);
+	double t0 = now_ms(), t1, t2, t3;
+	unsigned int a = 0, b, r;
+	double c;
+	for (r = 0; r != 10; r++) a += lcg(200000000u);   /* 2000M iterations, a few instructions each */
+	t1 = now_ms();
+	b = sieve(3000);
+	t2 = now_ms();
+	c = mandel(1600);
+	t3 = now_ms();
+	printf("lcg 2000M iterations: %.0f ms (check %u)
+", t1 - t0, a);
+	printf("sieve 64K x3000:      %.0f ms (primes %u)
+", t2 - t1, b);
+	printf("mandelbrot 1600x1600: %.0f ms (sum %.0f)
+", t3 - t2, c);
 	return 0;
 }
